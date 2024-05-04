@@ -1,5 +1,8 @@
 package com.my.db.access.tool;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.type.CollectionType;
 import com.my.db.exception.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -33,6 +36,46 @@ public class EntityService <T,ID>{
 //    @Autowired(required = true)
     protected JpaRepository<T,ID> repository;
 
+
+
+
+    /**
+     * ref: https://www.baeldung.com/jackson-linkedhashmap-cannot-be-cast
+     * json 轉 Iterable
+     * @param json
+     * @return
+     */
+    protected Iterable<T> json2Objects(String json){
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            CollectionType type = objectMapper.getTypeFactory().constructCollectionType(List.class, getRuntimecClass());
+            return objectMapper.readValue(json, type);
+//            return new ObjectMapper().readValue(json, new TypeReference<Iterable<Member>>() {});
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Json 無法解析, " + e);
+        }
+    }
+
+
+    /**
+     * json 轉 Object
+     * @param json
+     * @return
+     */
+    protected T json2Object(String json){
+        try {
+            return (T)new ObjectMapper().readValue(json, getRuntimecClass());
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Json 無法解析, " + e);
+        }
+    }
+
+
+    /**
+     * 儲存物件
+     * @param entity
+     * @return
+     */
     protected T saveEntity(T entity) {
         if(getRepository() == null){
             throw new RuntimeException("找不到 JpaRepository");
@@ -73,7 +116,7 @@ public class EntityService <T,ID>{
         //idValue == null means it is auto generate
         Object idValue = getIdValue(t);
         if(idValue != null && entityExistsById((ID) idValue )){
-            throw new DataException( getChildsGenericClass() .getSimpleName(), "key",  idValue.toString() );
+            throw new DataException( getRuntimecClass() .getSimpleName(), "key",  idValue.toString() );
         }
         return saveEntity(t);
     }
@@ -98,7 +141,7 @@ public class EntityService <T,ID>{
         if( o.isPresent() ){
             return (T)o.get();
         }else{
-            throw new EntityNotFoundException(getChildsGenericClass().getSimpleName(), "id", id.toString());
+            throw new EntityNotFoundException(getRuntimecClass().getSimpleName(), "id", id.toString());
         }
     }
 
@@ -121,7 +164,7 @@ public class EntityService <T,ID>{
             getRepository().deleteById(id);
             return true;
         }catch(EmptyResultDataAccessException emptyResultDataAccessException){
-            throw new EntityNotFoundException(getChildsGenericClass().getSimpleName(), "id", id.toString());
+            throw new EntityNotFoundException(getRuntimecClass().getSimpleName(), "id", id.toString());
         }catch(Exception e){
             throw e;
         }
@@ -132,7 +175,7 @@ public class EntityService <T,ID>{
      *  取得實作的類別
      *  reference: https://www.itdaan.com/tw/9bdf9dcd79d860bce05c708ddb2e4bda
      */
-    protected Class<Object> getChildsGenericClass() {
+    protected Class<Object> getRuntimecClass() {
         return (Class)((ParameterizedType)
                 (this.getClass().getGenericSuperclass()))
                 .getActualTypeArguments()[0];
@@ -145,7 +188,7 @@ public class EntityService <T,ID>{
      */
     public Iterable<T> getEntitiesBySQL(String sql) {
         try{
-            return  getEntityManager().createNativeQuery(sql, getChildsGenericClass()).getResultList();
+            return  getEntityManager().createNativeQuery(sql, getRuntimecClass()).getResultList();
         }catch(PersistenceException e){
             throw new SQLGrammerConflictException((sql + "<-- has somthing wrong, " + e.getMessage()));
         }
